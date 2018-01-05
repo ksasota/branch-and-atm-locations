@@ -16,6 +16,22 @@ let con = db.connect();
 
 app.use('/', routes);
 
+// Error Handling...
+app.use((req,res,next) => {
+	const err = new Error('Not found.');
+	err.status = 404;
+	next(err);
+});
+
+app.use((err, req, res, next) => {
+	res.status(err.status || 500);
+	res.json({
+		errors: {
+			message: err.message,
+			code: err.status
+		}
+	})
+});
 
 app.listen(port, () => {
   console.log(`Server is running on localhost:${port}`);
