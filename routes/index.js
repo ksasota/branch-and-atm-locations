@@ -14,198 +14,243 @@ const tableNames = {
 // ATMS
 /*************************/
 
-// Direct route
+// Error handling
 router.get('/atms', (req, res, next) => {
-  res.json(
-    {
-      "errors": [{
-          "code": "404",
-          "message": "Could not locate atms",
-          "description": "Latitude and Longitude required."
-        }]
+    const lat = req.query.lat;
+    const lon = req.query.lon;
+    let scale = 6371;
+    switch(req.query.scale){
+      case 'mi' : 
+        scale = 3959; 
+        break;
+      case 'm'  : 
+        scale = 6371000; 
+        break;
+      case 'km':
+      default: 
+        // km
+        scale = 6371;
     }
-  );
-});
-
-// Error handling for single param entered
-router.get('/atms/:lat', (req, res, next) => {
-  if(utils.validateLat(req.params.lat)){
-    res.json(
-      {
-        "errors": [{
-            "code": "404",
-            "message": "Could not locate atms",
-            "description": "Longitude required."
-          }]
-      }
-    );
-  }else{
-    res.json({
-      "errors": [{
-        "code": 404,
-        "message": "Could not locate atms",
-        "description": "Latitude not valid and Longtitude missing."
-      }]
-    });
-  }
-});
-
-// Error handling for invalid entries
-router.get('/atms/:lat/:lon', (req, res, next) => {
-  if(utils.validateLong(req.params.lon)){
-    next();
-  }else{
-    res.json({
-      "errors": [{
-        "code": 404,
-        "message": "Could not locate atms",
-        "description": "Longtitude not valid."
-      }]
-    });
+    const radius = req.query.radius || 1;
+    if(utils.validateLat(lat) && utils.validateLong(lon)){
+      next();
+    } else if (lat === undefined && lon === undefined && scale === 6371 && radius === 1) {
+      let query = 'SELECT * FROM `' + tableNames.atms +'`';
+              db.execute(query)
+                .then((data) => {
+                  if(data.data.length > 0){
+                    res.json(data);
+                  }else{
+                    res.status(404).json({
+                      errors: [{
+                        'code': 404,
+                        'message': 'Not Found',
+                        description: ''
+                      }]
+                    });
+                  }
+                })
+                .catch((error) => {
+                  res.json(error);
+                });
+      } else if (lat === undefined && lon === undefined) {
+      res.status(404).json(
+        response.Error('Latitude and longitude is missing.','Could not locate atms.', 404)
+      );
+  } else if (lon === undefined && !utils.validateLat(lat)) {
+      res.status(404).json(
+        response.Error('Latitude not valid and longitude is missing.','Could not locate atms.', 404)
+      );
+  } else if (lat === undefined && !utils.validateLong(lon)) {
+      res.status(404).json(
+        response.Error('Longitude not valid and latitude is missing.','Could not locate atms.', 404)
+      );
+  } else if (lat === undefined) {
+         res.status(404).json(
+        response.Error('Latitude is missing','Could not locate atms.', 404)
+      );
+  } else if (lon === undefined) {
+          res.status(404).json(
+        response.Error('Longitude is missing','Could not locate atms.', 404)
+      );
+  } else if(!utils.validateLat(lat) && !utils.validateLong(lon)){
+    res.status(404).json(
+      response.Error('Latitude and longitude not valid.','Could not locate atms.',404)
+    ); 
+    return;
+  } else if (!utils.validateLat(lat)){
+    res.status(404).json(
+      response.Error('Latitude not valid.','Could not locate atms.',404)
+    ); 
+    return;
+  } else if (!utils.validateLong(lon)){
+    res.status(404).json(
+      response.Error('Longtitude not valid.','Could not locate atms.',404)
+    );  
+    return;
   }
 });
 
 // GET: Atms
-router.get('/atms/:lat/:lon/:scale?/:radius?', (req, res) => {
-  
-  const lat = req.params.lat;
-  const lon = req.params.lon;
-
-  let scale = 6371;
-  switch(req.params.scale){
-    case 'mi' : 
-      scale = 3959; 
-      break;
-    case 'm'  : 
-      scale = 6371000; 
-      break;
-    case 'km':
-    default: 
-      // km
-      scale = 6371;
-  }
-
-  const radius = req.params.radius || 1;
-  let query = 'SELECT *, ( ? * acos( cos( radians( ? ) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians( ? ) ) + sin( radians( ? ) ) * sin( radians( latitude ) ) ) ) AS distance FROM `' + tableNames.atms +'` HAVING distance < ? ORDER BY distance;';
-
-  db.execute(query,[scale, parseFloat(lat), parseFloat(lon), parseFloat(lat) , parseInt(radius)])
-    .then((data) => {
-      if(data.data.length > 0){
-        //console.log(data);
-        res.json(data);
-      }else{
-        res.json({
-          errors: [{
-            'code': 404,
-            'message': 'Could not locate atms',
-            description: ''
-          }]
-        });
-      }
-    })
-    .catch((error) => {
-      res.json(error);
-    });
-
+router.get('/atms', (req, res) =>{  
+    const lat = req.query.lat;
+    const lon = req.query.lon;
+    let scale = 6371;
+    switch(req.query.scale){
+      case 'mi' : 
+        scale = 3959; 
+        break;
+      case 'm'  : 
+        scale = 6371000; 
+        break;
+      case 'km':
+      default: 
+        // km
+        scale = 6371;
+    }
+    const radius = req.query.radius || 1;
+      let query = 'SELECT *, ( ? * acos( cos( radians( ? ) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians( ? ) ) + sin( radians( ? ) ) * sin( radians( latitude ) ) ) ) AS distance FROM `' + tableNames.atms +'` HAVING distance < ? ORDER BY distance;';
+        db.execute(query,[scale, parseFloat(lat), parseFloat(lon), parseFloat(lat) , parseInt(radius)])
+          .then((data) => {
+            if(data.data.length > 0){
+              //console.log(data);
+              res.json(data);
+              
+            }else{
+              res.status(404).json({
+                errors: [{
+                  'code': 404,
+                  'message': 'Could not locate ATMs',
+                  description: 'No ATMs at radius ' + radius
+                }]
+              });
+            }
+          })
+          .catch((error) => {
+            res.json(error);
+          });
 });
-
 
 // BRANCHES
 /*************************/
 
-// Direct route
+// Error handling for invalid entries and missing fields
 router.get('/branches', (req, res, next) => {
-  res.json(
-    {
-      "errors": [{
-          "code": "404",
-          "message": "Could not locate branches",
-          "description": "Latitude and Longitude required."
-        }]
+  const lat = req.query.lat;
+    const lon = req.query.lon;
+    let scale = 6371;
+    switch(req.query.scale){
+      case 'mi' : 
+        scale = 3959; 
+        break;
+      case 'm'  : 
+        scale = 6371000; 
+        break;
+      case 'km':
+      default: 
+        // km
+        scale = 6371;
     }
-  );
-});
-
-// Error handling for single param entered
-router.get('/branches/:lat', (req, res, next) => {
-  if(utils.validateLat(req.params.lat)){
-    res.json(
-      {
-        "errors": [{
-            "code": "404",
-            "message": "Could not locate branches",
-            "description": "Longitude required."
-          }]
+    const radius = req.query.radius || 1;
+    if(utils.validateLat(req.query.lat) && utils.validateLong(req.query.lon)){
+      next();
+    } else if (lat === undefined && lon === undefined && scale === 6371 && radius === 1) {
+      let query = 'SELECT * FROM `' + tableNames.branches +'`';
+              db.execute(query)
+                .then((data) => {
+                  if(data.data.length > 0){
+                    res.json(data);
+                  }else{
+                    res.status(404).json({
+                      errors: [{
+                        'code': 404,
+                        'message': 'Not Found',
+                        description: ''
+                      }]
+                    });
+                  }
+                })
+                .catch((error) => {
+                  res.json(error);
+                });
+      } else if (lat === undefined && lon === undefined) {
+          res.status(404).json(
+            response.Error('Latitude and longitude is missing.','Could not locate atms.', 404)
+          );
+      } else if (lon === undefined && !utils.validateLat(lat)) {
+          res.status(404).json(
+            response.Error('Latitude not valid and longitude is missing.','Could not locate atms.', 404)
+          );
+      } else if (lat === undefined && !utils.validateLong(lon)) {
+          res.status(404).json(
+            response.Error('Longitude not valid and latitude is missing.','Could not locate atms.', 404)
+          );
+      } else if (lat === undefined) {
+             res.status(404).json(
+            response.Error('Latitude is missing','Could not locate atms.', 404)
+          );
+      } else if (lon === undefined) {
+              res.status(404).json(
+            response.Error('Longitude is missing','Could not locate atms.', 404)
+          );
+      } else if(!utils.validateLat(lat) && !utils.validateLong(lon)){
+        res.status(404).json(
+          response.Error('Latitude and longitude not valid.','Could not locate atms.',404)
+        ); 
+        return;
+      } else if (!utils.validateLat(lat)){
+        res.status(404).json(
+          response.Error('Latitude not valid.','Could not locate atms.',404)
+        ); 
+        return;
+      } else if (!utils.validateLong(lon)){
+        res.status(404).json(
+          response.Error('Longtitude not valid.','Could not locate atms.',404)
+        );  
+        return;
       }
-    );
-  }else{
-    res.json({
-      "errors": [{
-        "code": 404,
-        "message": "Could not locate branches",
-        "description": "Latitude not valid and Longtitude missing."
-      }]
-    });
-  }
 });
 
-// Error handling for invalid entries
-router.get('/branches/:lat/:lon', (req, res, next) => {
-  if(utils.validateLong(req.params.lon)){
-    next();
-  }else{
-    res.json({
-      "errors": [{
-        "code": 404,
-        "message": "Could not locate branches",
-        "description": "Longtitude not valid."
-      }]
-    });
-  }
-});
+
 
 // GET: Branches
-router.get('/branches/:lat/:lon/:scale?/:radius?', (req, res) => {
-  const lat = req.params.lat;
-  const lon = req.params.lon;
-
-  let scale = 6371;
-  switch(req.params.scale){
-    case 'mi' : 
-      scale = 3959; 
-      break;
-    case 'm'  : 
-      scale = 6371000; 
-      break;
-    case 'km':
-    default: 
-      // km
-      scale = 6371;
-  }
-
-  const radius = req.params.radius || 1;
-
-
-  let query = 'SELECT *, ( ? * acos( cos( radians( ? ) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians( ? ) ) + sin( radians( ? ) ) * sin( radians( latitude ) ) ) ) AS distance FROM `' + tableNames.branches +'` HAVING distance < ? ORDER BY distance;';
-
-  db.execute(query,[scale, parseFloat(lat), parseFloat(lon), parseFloat(lat) , parseInt(radius)])
-    .then((data) => {
-      if(data.data.length > 0){
-        res.json(data);
-      }else{
-        res.json({
-          errors: [{
-            'code': 404,
-            'message': 'Could not locate branches',
-            description: 'Try editing the radius.'
-          }]
-        });
-      }
-    })
-    .catch((error) => {
-      res.json(error);
-    });
-
+router.get('/branches', (req, res) => {
+  const lat = req.query.lat;
+    const lon = req.query.lon;
+    let scale = 6371;
+    switch(req.query.scale){
+      case 'mi' : 
+        scale = 3959; 
+        break;
+      case 'm'  : 
+        scale = 6371000; 
+        break;
+      case 'km':
+      default: 
+        // km
+        scale = 6371;
+    }
+    const radius = req.query.radius || 1;
+      let query = 'SELECT *, ( ? * acos( cos( radians( ? ) ) * cos( radians( latitude ) ) * cos( radians( longitude ) - radians( ? ) ) + sin( radians( ? ) ) * sin( radians( latitude ) ) ) ) AS distance FROM `' + tableNames.branches +'` HAVING distance < ? ORDER BY distance;';
+        db.execute(query,[scale, parseFloat(lat), parseFloat(lon), parseFloat(lat) , parseInt(radius)])
+          .then((data) => {
+            if(data.data.length > 0){
+              //console.log(data);
+              res.json(data);
+              
+            }else{
+              res.status(404).json({
+                errors: [{
+                  'code': 404,
+                  'message': 'Could not locate branches',
+                  description: 'No Branches at radius ' + radius
+                }]
+              });
+            }
+          })
+          .catch((error) => {
+            res.json(error);
+          });
 });
 
 
